@@ -42,6 +42,19 @@ type Query {
 	nodes(id: ID, subscriptionId: ID, first: Int, after: ID): NodesConnection! @hasRole(role: ADMIN)
 	nodeLatencies(ids: [ID!]): [NodeLatency!]! @hasRole(role: ADMIN)
 	general: General! @hasRole(role: ADMIN)
+
+	# Client features queries
+	lanDevices: [LanDeviceHint!]! @hasRole(role: ADMIN)
+	ruleLists: [RuleList!]! @hasRole(role: ADMIN)
+	policyDraft(routingId: ID!): PolicyDraftState! @hasRole(role: ADMIN)
+	previewPolicy(configId: ID, dnsId: ID, routingId: ID): PolicyPreview! @hasRole(role: ADMIN)
+	configSnapshots: [ConfigSnapshot!]! @hasRole(role: ADMIN)
+	proxyChains: [ProxyChain!]! @hasRole(role: ADMIN)
+	groupFailover(groupId: ID!): GroupFailoverStatus! @hasRole(role: ADMIN)
+	subscriptionEnhanced(id: ID!): SubscriptionEnhanced! @hasRole(role: ADMIN)
+	dnsListBindings(dnsId: ID!): [DnsListBinding!]! @hasRole(role: ADMIN)
+	traceActiveRoute(input: TraceRouteInput!): TraceRouteResult! @hasRole(role: ADMIN)
+	systemApplyState: SystemApplyState! @hasRole(role: ADMIN)
 }
 type Mutation {
 	# createUser creates a user if there is no user.
@@ -153,6 +166,27 @@ type Mutation {
 
 	# removeGroup is to remove a group.
 	removeGroup(id: ID!): Int! @hasRole(role: ADMIN)
+
+	# Client features mutations
+	savePolicyDraft(routingId: ID!, expectedRevision: Int, policyJson: String!): PolicyDraftResult! @hasRole(role: ADMIN)
+	setRoutingEditMode(routingId: ID!, editMode: String!): PolicyDraftState! @hasRole(role: ADMIN)
+	cloneRoutingAsRaw(routingId: ID!, newName: String): Routing! @hasRole(role: ADMIN)
+	applyPolicyRevision(expectedDraftRevision: Int, expectedDigest: String, configId: ID, dnsId: ID, routingId: ID): PolicyApplyResult! @hasRole(role: ADMIN)
+	rollbackPolicy(snapshotId: ID!): PolicyApplyResult! @hasRole(role: ADMIN)
+	setConfigAutoApply(configId: ID!, autoApply: Boolean!): Boolean! @hasRole(role: ADMIN)
+	setDnsListBindings(dnsId: ID!, bindings: [DnsListBindingInput!]!): Boolean! @hasRole(role: ADMIN)
+	saveRuleList(input: SaveRuleListInput!): SaveRuleListResult! @hasRole(role: ADMIN)
+	deleteRuleList(id: ID!): Boolean! @hasRole(role: ADMIN)
+	refreshRuleList(id: ID!): RefreshRuleListResult! @hasRole(role: ADMIN)
+	updateSubscriptionEnhanced(id: ID!, input: SubscriptionEnhancedInput!): SubscriptionEnhanced! @hasRole(role: ADMIN)
+	refreshSubscriptionEnhanced(id: ID!): RefreshSubscriptionResult! @hasRole(role: ADMIN)
+	saveProxyChain(input: SaveProxyChainInput!): ProxyChain! @hasRole(role: ADMIN)
+	deleteProxyChain(id: ID!): Boolean! @hasRole(role: ADMIN)
+	groupAddChains(id: ID!, chainIDs: [ID!]!): Int! @hasRole(role: ADMIN)
+	groupDelChains(id: ID!, chainIDs: [ID!]!): Int! @hasRole(role: ADMIN)
+	saveGroupFailover(input: SaveGroupFailoverInput!): GroupFailoverStatus! @hasRole(role: ADMIN)
+	probeGroupFailover(groupId: ID!): GroupFailoverStatus! @hasRole(role: ADMIN)
+	testNodePath(input: TestNodePathInput!): NodePathProbeResult! @hasRole(role: ADMIN)
 }
 enum Role {
 	ADMIN

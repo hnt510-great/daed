@@ -8,6 +8,15 @@ export default {
   generates: {
     'apps/web/src/schemas/gql/': {
       preset: 'client',
+      config: {
+        defaultScalarType: 'any',
+        scalars: {
+          Duration: 'string',
+          Time: 'string',
+        },
+        skipTypename: false,
+        enumsAsTypes: false,
+      },
     },
   },
   hooks: { afterOneFileWrite: ['prettier -w'] },

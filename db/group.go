@@ -10,11 +10,12 @@ import (
 )
 
 type Group struct {
-	ID           uint   `gorm:"primaryKey;autoIncrement"`
-	Name         string `gorm:"not null;unique;index"`
-	Policy       string `gorm:"not null"`
-	PolicyParams []GroupPolicyParam
-	Node         []Node              `gorm:"many2many:group_nodes;"`
+	ID                   uint                `gorm:"primaryKey;autoIncrement"`
+	Name                 string              `gorm:"not null;unique;index"`
+	Policy               string              `gorm:"not null"`
+	PolicyParams         []GroupPolicyParam
+	Node                 []Node              `gorm:"many2many:group_nodes;"`
+	Chains               []ProxyChain        `gorm:"many2many:group_chains;"`
 	SubscriptionBindings []GroupSubscription `gorm:"foreignKey:GroupID"`
 
 	Version  uint `gorm:"not null;default:0"`

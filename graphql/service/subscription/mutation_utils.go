@@ -226,7 +226,7 @@ func AddUpdateScheduler(ctx context.Context, id uint) {
 	}
 	logrus.Info("Subscription " + tag + " update task enabled, with exp " + sub.CronExp)
 	_, err := s.Cron(sub.CronExp).Do(func() {
-		if _, err := UpdateById(context.Background(), sub.ID); err != nil {
+		if _, err := RefreshStableByID(context.Background(), sub.ID, true); err != nil {
 			logrus.Error(err)
 		}
 	})
@@ -263,68 +263,11 @@ func Update(ctx context.Context, _id graphql.ID) (r *Resolver, err error) {
 }
 
 func UpdateById(ctx context.Context, subId uint) (sub *db.Subscription, err error) {
-	// Fetch node links.
-	var m db.Subscription
-	if err = db.DB(ctx).Where(&db.Subscription{ID: subId}).First(&m).Error; err != nil {
-		return nil, err
-	}
-	links, err := fetchLinks(m.Link)
+	summary, err := RefreshStableByID(ctx, subId, false)
 	if err != nil {
 		return nil, err
 	}
-
-	tx := db.BeginTx(ctx)
-	defer func() {
-		if err == nil {
-			err = tx.Commit().Error
-		} else {
-			tx.Rollback()
-		}
-	}()
-	// Remove those nodes whose subscription are independent from any groups.
-	subQuery := tx.Raw(`select nodes.id as id
-                from nodes
-                inner join group_nodes on group_nodes.node_id = nodes.id
-                where subscription_id = ?`, subId)
-
-	if err = tx.Where("subscription_id = ?", subId).
-		Where("id not in (?)", subQuery).
-		Select(clause.Associations).
-		Delete(&db.Node{}).Error; err != nil {
-		return nil, err
-	}
-	// Import node links.
-	var args []*internal.ImportArgument
-	for _, link := range links {
-		args = append(args, &internal.ImportArgument{Link: link})
-	}
-	result, err := node.Import(tx, false, &subId, args)
-	if err != nil {
-		return nil, err
-	}
-	hasAnyCandidate := false
-	for _, r := range result {
-		if r.Error == nil || *r.Error == node.DuplicatedError.Error() {
-			hasAnyCandidate = true
-			break
-		}
-	}
-	if !hasAnyCandidate {
-		return nil, fmt.Errorf("interrupt to update subscription: no any valid node can be imported")
-	}
-	// Update updated_at and return the latest version.
-	if err = tx.Model(&m).
-		Clauses(clause.Returning{}).
-		Where(&db.Subscription{ID: subId}).
-		Update("updated_at", time.Now()).Error; err != nil {
-		return nil, err
-	}
-
-	// Update modified if subscription is referenced by running config.
-	if err = AutoUpdateVersionByIds(tx, []uint{subId}); err != nil {
-		return nil, err
-	}
-	return &m, nil
+	return summary.Subscription, nil
 }
 
 func Remove(ctx context.Context, _ids []graphql.ID) (n int32, err error) {

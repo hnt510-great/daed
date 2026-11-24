@@ -12,9 +12,7 @@ import type {
   tuicSchema,
   v2raySchema,
 } from './schema'
-import type { GlobalInput } from '~/schemas/gql/graphql'
-
-import { Policy } from '~/schemas/gql/graphql'
+import type { GlobalInput, Policy } from '~/schemas/gql/graphql'
 import { DialMode, LogLevel, TcpCheckHttpMethod, TLSImplementation, UTLSImitate } from './misc'
 
 export const DEFAULT_ENDPOINT_URL = `${location.protocol}//${location.hostname}:2023/graphql`
@@ -78,7 +76,7 @@ export function DEFAULT_CONFIG_WITH_LAN_INTERFACEs(interfaces: string[] = []): G
   }
 }
 
-export const DEFAULT_GROUP_POLICY = Policy.MinMovingAvg
+export const DEFAULT_GROUP_POLICY: Policy = 'min_moving_avg'
 
 export const DEFAULT_ROUTING = `
 pname(NetworkManager, systemd-resolved, dnsmasq) -> must_direct

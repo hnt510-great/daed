@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/netip"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -28,8 +29,9 @@ import (
 var ErrControlPlaneNotInit = fmt.Errorf("control plane doesn't init yet")
 
 type ReloadMessage struct {
-	Config   *daeConfig.Config
-	Callback chan<- error
+	Config              *daeConfig.Config
+	RoutingTraceEnabled bool
+	Callback            chan<- error
 	// failed is set by the serve monitor when a generation's datapath died.
 	// The run loop acts on it only while that generation is still the active
 	// one; a report from a generation that has since been replaced is stale.
@@ -43,7 +45,35 @@ var EmptyConfig *daeConfig.Config
 // active is the generation currently serving traffic. It is nil before the
 // first generation is ready and while a reload has retired the old one.
 var active atomic.Pointer[control.ControlPlane]
+var activeGen atomic.Uint64
 var onceWaitingNetwork sync.Once
+
+var (
+	genHooksMu sync.RWMutex
+	genHooks   []func(gen uint64, c *control.ControlPlane)
+)
+
+// RegisterGenerationHook registers a callback invoked after every active
+// control plane change (including initial ready and reload).
+func RegisterGenerationHook(fn func(gen uint64, c *control.ControlPlane)) {
+	genHooksMu.Lock()
+	defer genHooksMu.Unlock()
+	genHooks = append(genHooks, fn)
+}
+
+func notifyGenerationHooks(gen uint64, c *control.ControlPlane) {
+	genHooksMu.RLock()
+	hooks := append([]func(uint64, *control.ControlPlane){}, genHooks...)
+	genHooksMu.RUnlock()
+	for _, fn := range hooks {
+		fn(gen, c)
+	}
+}
+
+// ActiveGeneration returns the monotonically increasing runtime generation ID.
+func ActiveGeneration() uint64 {
+	return activeGen.Load()
+}
 
 func init() {
 	sections, err := config_parser.Parse(`global{} routing{}`)
@@ -94,12 +124,15 @@ func Run(log *logrus.Logger, conf *daeConfig.Config, externGeoDataDirs []string,
 		return nil
 	}
 
-	gen, err := startGeneration(log, nil, nil, conf, externGeoDataDirs)
+	traceEnabled := false
+	gen, err := startGeneration(log, nil, nil, conf, externGeoDataDirs, traceEnabled)
 	if err != nil {
 		shutdownProcess(log, nil)
 		return err
 	}
 	active.Store(gen.c)
+	gnum := activeGen.Add(1)
+	notifyGenerationHooks(gnum, gen.c)
 	log.Infoln("Ready")
 
 	// A nil message is the exit request: cmd sends it on shutdown and the
@@ -148,14 +181,15 @@ loop:
 
 		log.Warnln("[Reload] Load new control plane")
 		var errReload error
-		newGen, err := startGeneration(log, gen.c, dnsCache, newConf, externGeoDataDirs)
+		newTraceEnabled := newReloadMsg.RoutingTraceEnabled
+		newGen, err := startGeneration(log, gen.c, dnsCache, newConf, externGeoDataDirs, newTraceEnabled)
 		if err != nil {
 			errReload = err
 			log.WithFields(logrus.Fields{
 				"err": err,
 			}).Errorln("[Reload] Failed to reload; try to roll back configuration")
 			// Load last config back.
-			newGen, err = startGeneration(log, gen.c, dnsCache, conf, externGeoDataDirs)
+			newGen, err = startGeneration(log, gen.c, dnsCache, conf, externGeoDataDirs, traceEnabled)
 			if err != nil {
 				shutdownProcess(log, nil)
 				log.WithFields(logrus.Fields{
@@ -163,11 +197,15 @@ loop:
 				}).Fatalln("[Reload] Failed to roll back configuration")
 			}
 			newConf = conf
+			newTraceEnabled = traceEnabled
 			log.Errorln("[Reload] Last reload failed; rolled back configuration")
 		}
 		gen = newGen
 		conf = newConf
+		traceEnabled = newTraceEnabled
 		active.Store(gen.c)
+		gnum := activeGen.Add(1)
+		notifyGenerationHooks(gnum, gen.c)
 		log.Warnln("[Reload] Finished")
 		newReloadMsg.Callback <- errReload
 	}
@@ -179,8 +217,8 @@ loop:
 // startGeneration builds a control plane for conf, inherits dialer health
 // from previous when given, and serves it. On failure nothing of the new
 // generation is left behind.
-func startGeneration(log *logrus.Logger, previous *control.ControlPlane, dnsCache map[string]*control.DnsCache, conf *daeConfig.Config, externGeoDataDirs []string) (*generation, error) {
-	c, err := newControlPlane(log, dnsCache, conf, externGeoDataDirs)
+func startGeneration(log *logrus.Logger, previous *control.ControlPlane, dnsCache map[string]*control.DnsCache, conf *daeConfig.Config, externGeoDataDirs []string, routingTraceEnabled bool) (*generation, error) {
+	c, err := newControlPlane(log, dnsCache, conf, externGeoDataDirs, routingTraceEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -308,11 +346,20 @@ func shutdownProcess(log *logrus.Logger, gen *generation) error {
 	return nil
 }
 
-func newControlPlane(log *logrus.Logger, dnsCache map[string]*control.DnsCache, conf *daeConfig.Config, externGeoDataDirs []string) (c *control.ControlPlane, err error) {
+func newControlPlane(log *logrus.Logger, dnsCache map[string]*control.DnsCache, conf *daeConfig.Config, externGeoDataDirs []string, routingTraceEnabled bool) (c *control.ControlPlane, err error) {
 
-	// Print configuration.
+	// Print redacted configuration (never dump raw node credentials to debug logs).
 	if log.IsLevelEnabled(logrus.DebugLevel) {
-		bConf, _ := conf.Marshal(2)
+		redacted := deepcopy.Copy(conf).(*daeConfig.Config)
+		for i, n := range redacted.Node {
+			s := string(n)
+			if idx := strings.Index(s, ":"); idx > 0 {
+				redacted.Node[i] = daeConfig.KeyableString(s[:idx] + ":<redacted>")
+			} else {
+				redacted.Node[i] = "<redacted>"
+			}
+		}
+		bConf, _ := redacted.Marshal(2)
 		log.Debugln(string(bConf))
 	}
 
@@ -382,6 +429,7 @@ func newControlPlane(log *logrus.Logger, dnsCache map[string]*control.DnsCache, 
 			DirectDialer:         directDialers.Symmetric,
 			FullconeDirectDialer: directDialers.Fullcone,
 			SystemDNSResolver:    systemDNSResolver,
+			RoutingTraceEnabled:  routingTraceEnabled,
 		},
 	)
 	if err != nil {

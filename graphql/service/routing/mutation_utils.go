@@ -56,6 +56,9 @@ func Update(ctx context.Context, _id graphql.ID, routing string) (r *Resolver, e
 	if err = tx.Model(&db.Routing{}).Where("id = ?", id).First(&m).Error; err != nil {
 		return nil, err
 	}
+	if m.EditMode == db.RoutingEditModeVisual {
+		return nil, fmt.Errorf("routing %q is managed in visual policy mode; use savePolicyDraft or clone as a raw copy before editing raw text", m.Name)
+	}
 	// Prepare to partially update.
 	m.Routing = "routing {\n" + routing + "\n}"
 	// Parse it to check the grammar.

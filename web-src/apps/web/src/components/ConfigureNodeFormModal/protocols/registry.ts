@@ -10,7 +10,7 @@ import {
   tuicProtocol,
   v2rayProtocol,
 } from './complex'
-import { httpProtocol, socks5Protocol } from './simple'
+import { httpProtocol, naiveHttpsProtocol, socks5Protocol } from './simple'
 
 /**
  * Creates a protocol registry with all supported protocols
@@ -56,6 +56,7 @@ protocolRegistry.register(anytlsProtocol as unknown as ProtocolConfig)
 protocolRegistry.register(tuicProtocol as unknown as ProtocolConfig)
 protocolRegistry.register(httpProtocol as unknown as ProtocolConfig)
 protocolRegistry.register(socks5Protocol as unknown as ProtocolConfig)
+protocolRegistry.register(naiveHttpsProtocol as unknown as ProtocolConfig)
 
 /**
  * Get all registered protocols

@@ -13,5 +13,9 @@ type Config struct {
 	Selected bool `gorm:"not null"` // Redundancy for convenient.
 	Version  uint `gorm:"not null;default:0"`
 
+	// Incremental client-feature fields.
+	AutoApply           bool `gorm:"not null;default:false"`
+	RoutingTraceEnabled bool `gorm:"not null;default:true"`
+
 	versionUpdated uint32
 }

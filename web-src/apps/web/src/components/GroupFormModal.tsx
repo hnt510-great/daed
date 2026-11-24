@@ -11,11 +11,13 @@ import { Input } from '~/components/ui/input'
 import { Select } from '~/components/ui/select'
 import { DEFAULT_GROUP_POLICY } from '~/constants'
 import { useSetValue } from '~/hooks/useSetValue'
-import { Policy } from '~/schemas/gql/graphql'
+import type { Policy } from '~/schemas/gql/graphql'
+
+const POLICY_VALUES = ['min_moving_avg', 'min_avg10', 'min', 'random', 'fixed'] as const satisfies readonly Policy[]
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
-  policy: z.nativeEnum(Policy),
+  policy: z.enum(POLICY_VALUES),
   policyParams: z.array(z.object({ key: z.string(), val: z.string() })),
 })
 
@@ -98,35 +100,35 @@ export function GroupFormModal({
 
   const policyData = [
     {
-      label: Policy.MinMovingAvg,
-      value: Policy.MinMovingAvg,
+      label: 'min_moving_avg',
+      value: 'min_moving_avg' as Policy,
       description: t('descriptions.group.MinMovingAvg'),
     },
     {
-      label: Policy.MinAvg10,
-      value: Policy.MinAvg10,
+      label: 'min_avg10',
+      value: 'min_avg10' as Policy,
       description: t('descriptions.group.MinAvg10'),
     },
     {
-      label: Policy.Min,
-      value: Policy.Min,
+      label: 'min',
+      value: 'min' as Policy,
       description: t('descriptions.group.Min'),
     },
     {
-      label: Policy.Random,
-      value: Policy.Random,
+      label: 'random',
+      value: 'random' as Policy,
       description: t('descriptions.group.Random'),
     },
     {
-      label: Policy.Fixed,
-      value: Policy.Fixed,
+      label: 'fixed',
+      value: 'fixed' as Policy,
       description: t('descriptions.group.Fixed'),
     },
   ]
 
   const onSubmit = async (data: FormValues) => {
-    const policyParams = data.policy === Policy.Fixed
-      ? editingID && origins?.policy === Policy.Fixed
+    const policyParams = data.policy === 'fixed'
+      ? editingID && origins?.policy === 'fixed'
         ? origins.policyParams
         : [{ key: '', val: '0' }]
       : []

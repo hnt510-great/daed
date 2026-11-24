@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/daeuniverse/dae-wing/common"
@@ -18,6 +19,9 @@ import (
 func NewNodeModel(link string, tag *string, subscriptionId *uint) (*Node, error) {
 	if !strings.Contains(link, "://") {
 		return nil, BadLinkFormatError
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(link)), "naive+quic://") {
+		return nil, fmt.Errorf("naive+quic transport is not supported in this version; use naive+https")
 	}
 	var _tag string
 	if tag != nil {

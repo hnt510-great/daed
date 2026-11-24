@@ -19,7 +19,8 @@ import (
 	"github.com/daeuniverse/dae-wing/db"
 	"github.com/daeuniverse/dae-wing/graphql"
 	"github.com/daeuniverse/dae-wing/graphql/service/config"
-
+	"github.com/daeuniverse/dae-wing/graphql/service/failover"
+	"github.com/daeuniverse/dae-wing/graphql/service/rulelist"
 	"github.com/daeuniverse/dae-wing/graphql/service/subscription"
 	"github.com/daeuniverse/dae-wing/webrender"
 	"github.com/golang-jwt/jwt/v5"
@@ -82,7 +83,16 @@ var (
 				logrus.Fatalln("Failed to init db:", err)
 			}
 
+			// Register opt-in auto-apply hooks for scheduled refreshes.
+			autoApplyFn := func(source string) {
+				config.AutoApplyIfAllowed(db.DB(context.Background()), source)
+			}
+			rulelist.RegisterAutoApplyHook(autoApplyFn)
+			subscription.RegisterAutoApplyHook(autoApplyFn)
+
 			subscription.UpdateAll(context.TODO())
+			rulelist.StartAllSchedulers(context.TODO())
+			failover.Default().Start()
 
 			// Run dae.
 			var logOpts *lumberjack.Logger
@@ -161,13 +171,7 @@ func restoreRunningState() (err error) {
 	if !reload {
 		return nil
 	}
-	tx := db.BeginTx(context.TODO())
-	// Reload.
-	if _, err = config.Run(tx, false); err != nil {
-		tx.Rollback()
-
-		// Another tx.
-		// Set running = false.
+	if err = config.RestoreFromSnapshot(db.DB(context.TODO())); err != nil {
 		tx2 := db.BeginTx(context.TODO())
 		var sys db.System
 		if err2 := tx2.Model(&sys).Select("id").First(&sys).Error; err2 != nil {
@@ -175,7 +179,9 @@ func restoreRunningState() (err error) {
 			return fmt.Errorf("%w; %v", err, err2)
 		}
 		if err2 := tx2.Model(&sys).Updates(map[string]interface{}{
-			"running": false,
+			"running":           false,
+			"last_apply_status": "apply_failed",
+			"last_apply_error":  err.Error(),
 		}).Error; err2 != nil {
 			tx2.Rollback()
 			return fmt.Errorf("%w; %v", err, err2)
@@ -183,7 +189,6 @@ func restoreRunningState() (err error) {
 		tx2.Commit()
 		return err
 	}
-	tx.Commit()
 	return nil
 }
 

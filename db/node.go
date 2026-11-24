@@ -14,6 +14,12 @@ type Node struct {
 
 	Tag *string `gorm:"unique"`
 
+	// Stable identity & rebind tracking for subscription refreshes.
+	StableKey    string `gorm:"not null;default:''"`
+	IdentityKey  string `gorm:"not null;default:''"`
+	NeedsRebind  bool   `gorm:"not null;default:false"`
+	RebindReason string `gorm:"not null;default:''"`
+
 	// Foreign keys.
 	// Nil SubscriptionID indicates nodes belonging to no subscription.
 	SubscriptionID *uint

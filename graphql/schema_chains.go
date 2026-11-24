@@ -31,4 +31,5 @@ var schemaChains = []SchemaChain{
 	node.Schema,
 	subscription.Schema,
 	user.Schema,
+	ClientFeaturesSchema,
 }

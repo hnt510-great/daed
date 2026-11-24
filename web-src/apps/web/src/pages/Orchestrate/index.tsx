@@ -21,6 +21,7 @@ import { useMediaQuery } from '~/hooks'
 import { appStateAtom, groupSortOrdersAtom } from '~/store'
 import { deriveTime } from '~/utils'
 import { Config } from './Config'
+import { ClientFeaturesPanel } from './ClientFeaturesPanel'
 import { DNS } from './DNS'
 import { GroupResource } from './Group'
 import { NODE_DROPPABLE_ID, NodeResource } from './Node'
@@ -624,6 +625,8 @@ export function OrchestratePage() {
       </div>
 
       <TrafficOverview />
+
+      <ClientFeaturesPanel />
 
       <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
         <div className={`grid gap-5 ${matchSmallScreen ? 'grid-cols-1' : 'grid-cols-3'}`}>

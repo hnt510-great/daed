@@ -14,6 +14,13 @@ type System struct {
 	RunningGroupVersionSum uint   `gorm:"not null;default:0"`
 	RunningGroupIds        string `gorm:"not null;default:''"`
 
+	// Snapshot & apply-state tracking.
+	ActiveSnapshotID *uint
+	Generation       uint64 `gorm:"not null;default:0"`
+	LastApplyStatus  string `gorm:"not null;default:'stopped'"` // running | stopped | apply_failed
+	LastApplyError   string `gorm:"not null;default:''"`
+	ActiveDigest     string `gorm:"not null;default:''"`
+
 	// Foreign keys.
 	RunningConfigID  *uint
 	RunningConfig    *Config
