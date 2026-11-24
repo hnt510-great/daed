@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
 	"sort"
@@ -26,10 +27,32 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// DefaultLanInterfaceEnv names the comma-separated LAN interfaces that a new
+// config gets when it is created without any. The dashboard fills
+// lan_interface from interfaces that carry a default route; on a router that
+// would be the WAN, and with netlink v1.3.1 (default routes report Dst
+// 0.0.0.0/0, not nil) it is always empty, so dae never hooks the LAN.
+const DefaultLanInterfaceEnv = "DAED_DEFAULT_LAN_INTERFACE"
+
+// applyDefaultLanInterface fills an empty lan_interface of a config that is
+// being created. Updates keep whatever the user set, including an empty list.
+func applyDefaultLanInterface(glob *global.Input) {
+	if glob.LanInterface != nil && len(*glob.LanInterface) > 0 {
+		return
+	}
+	ifs := strings.FieldsFunc(os.Getenv(DefaultLanInterfaceEnv), func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	})
+	if len(ifs) > 0 {
+		glob.LanInterface = &ifs
+	}
+}
+
 func Create(ctx context.Context, name string, glob *global.Input) (*Resolver, error) {
 	if glob == nil {
 		glob = &global.Input{}
 	}
+	applyDefaultLanInterface(glob)
 	strGlobal, err := glob.Marshal()
 	if err != nil {
 		return nil, err
